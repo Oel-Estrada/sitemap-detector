@@ -18,6 +18,43 @@ if (
 const BADGE_BG_COLOR = "#f44336";   // matches --color-error
 const BADGE_TEXT_COLOR = "#ffffff"; // matches --color-white
 
+// Performance-related constants and caches
+const MAX_SITEMAP_BYTES = 5 * 1024 * 1024; // 5 MB guard to avoid huge downloads
+const SITEMAP_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+/** @type {Map<string, {text:string, fetchedAt:number}>} */
+const sitemapCache = new Map(); // key: sitemapUrl
+/** @type {Map<number, number>} */
+const lastBadgeCount = new Map(); // tabId -> last count applied
+
+function updateBadge(tabId, count) {
+  try {
+    const prev = lastBadgeCount.get(tabId);
+    if (prev === count) return; // avoid redundant API calls
+    lastBadgeCount.set(tabId, count);
+
+    const text = count && count > 0 ? String(count) : "";
+    const badgeApi = (chrome && chrome.action) ? chrome.action : (chrome && chrome.browserAction) ? chrome.browserAction : null;
+    if (badgeApi) {
+      try { badgeApi.setBadgeText({ text, tabId }); } catch (_) { /* ignore */ }
+      try { badgeApi.setBadgeBackgroundColor({ color: BADGE_BG_COLOR, tabId }); } catch (_) { /* ignore */ }
+    }
+    try {
+      if (typeof chrome.action.setBadgeTextColor === "function") {
+        chrome.action.setBadgeTextColor({ color: BADGE_TEXT_COLOR, tabId });
+      } else if (
+        chrome.browserAction &&
+        typeof chrome.browserAction.setBadgeTextColor === "function"
+      ) {
+        chrome.browserAction.setBadgeTextColor({ color: BADGE_TEXT_COLOR, tabId });
+      }
+    } catch (_) {
+      // ignore optional text-color errors
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 async function getSitemapUrl(hostname) {
   const possibleSitemapUrls = [
     `https://${hostname}/sitemap.xml`,
@@ -46,14 +83,36 @@ async function getSitemapUrl(hostname) {
  * @returns {Object} An object containing the parsing result and URLs
  */
 async function parseSitemap(sitemapUrl) {
+  // Cache-first: return recent fetch to avoid repeated network
+  const cached = sitemapCache.get(sitemapUrl);
+  const now = Date.now();
+  if (cached && now - cached.fetchedAt < SITEMAP_CACHE_TTL_MS) {
+    return parseSitemapFromText(cached.text);
+  }
+
   // Try a normal fetch first; if it fails, the caller can try a page-context fetch
   try {
-    const response = await fetch(sitemapUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const response = await fetch(sitemapUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
+    const cl = response.headers.get("content-length");
+    if (cl && Number(cl) > MAX_SITEMAP_BYTES) {
+      throw new Error("Sitemap demasiado grande (límite 5MB)");
+    }
+
     const text = await response.text();
+    // basic size guard post-read (in case no content-length provided)
+    if (text && text.length > MAX_SITEMAP_BYTES * 1.2) {
+      throw new Error("Sitemap excede el tamaño permitido");
+    }
+
+    sitemapCache.set(sitemapUrl, { text, fetchedAt: now });
     return parseSitemapFromText(text);
   } catch (error) {
     return {
@@ -309,22 +368,7 @@ function addNonIndexedUrl(tabId, url) {
     set.add(cleanUrl);
 
     const count = set.size;
-    chrome.action.setBadgeText({ text: String(count), tabId });
-    chrome.action.setBadgeBackgroundColor({ color: BADGE_BG_COLOR, tabId });
-
-    // Ensure badge text is white for readability
-    try {
-      if (typeof chrome.action.setBadgeTextColor === "function") {
-        chrome.action.setBadgeTextColor({ color: BADGE_TEXT_COLOR, tabId });
-      } else if (
-        chrome.browserAction &&
-        typeof chrome.browserAction.setBadgeTextColor === "function"
-      ) {
-        chrome.browserAction.setBadgeTextColor({ color: BADGE_TEXT_COLOR, tabId });
-      }
-    } catch (e) {
-      // ignore
-    }
+    updateBadge(tabId, count);
   } catch (e) {
     console.error("Error adding non-indexed URL:", e);
   }
@@ -348,17 +392,9 @@ function removeNonIndexedUrl(tabId, url) {
 
     if (set.size === 0) {
       nonIndexedByTab.delete(tabId);
-      try {
-        chrome.action.setBadgeText({ text: "", tabId });
-      } catch (error) {
-        // Ignore errors
-      }
+      updateBadge(tabId, 0);
     } else {
-      try {
-        chrome.action.setBadgeText({ text: String(set.size), tabId });
-      } catch (error) {
-        console.error("Error updating badge text:", e);
-      }
+      updateBadge(tabId, set.size);
     }
   } catch (error) {
     console.error("Error removing non-indexed URL:", error);
@@ -445,19 +481,7 @@ function updateBadgeFromResult(result, tabId) {
       const count = nonIndexedByTab.get(tabId)
         ? nonIndexedByTab.get(tabId).size
         : 0;
-      if (count === 0) {
-        try {
-          chrome.action.setBadgeText({ text: "", tabId });
-        } catch (error) {
-          // Ignore errors
-        }
-      } else {
-        try {
-          chrome.action.setBadgeText({ text: String(count), tabId });
-        } catch (error) {
-          // Ignore errors
-        }
-      }
+      updateBadge(tabId, count);
     }
   } catch (error) {
     console.error("Error setting badge:", error);
@@ -502,8 +526,9 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastProcessedUrlByTab.delete(tabId);
   nonIndexedByTab.delete(tabId);
+  lastBadgeCount.delete(tabId);
   try {
-    chrome.action.setBadgeText({ text: "", tabId });
+    updateBadge(tabId, 0);
   } catch (error) {
     // Ignore errors
   }

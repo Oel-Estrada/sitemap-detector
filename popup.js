@@ -120,25 +120,36 @@ function displayStatus(result) {
  * @returns {void}
  */
 function displayUrlsList(urls) {
+  // Clear container once
   urlsContainer.innerHTML = "";
 
-  // Display first 20 URLs
+  // Display first 20 URLs using a fragment to reduce reflow
   const displayUrls = urls.slice(0, 20);
+  const frag = document.createDocumentFragment();
 
-  displayUrls.forEach((item, index) => {
+  for (const item of displayUrls) {
     const urlItem = document.createElement("div");
     urlItem.className = "url-item";
-    let html = `<a href="${item.loc}" target="_blank">${item.loc}</a>`;
+
+    const link = document.createElement("a");
+    link.href = item.loc;
+    link.target = "_blank";
+    link.textContent = item.loc;
+    urlItem.appendChild(link);
 
     if (item.lastmod) {
-      html += '<div class="url-meta">';
-      html += `<div>Actualización: ${formatDate(item.lastmod)}</div>`;
-      html += "</div>";
+      const meta = document.createElement("div");
+      meta.className = "url-meta";
+      const metaText = document.createElement("div");
+      metaText.textContent = `Actualización: ${formatDate(item.lastmod)}`;
+      meta.appendChild(metaText);
+      urlItem.appendChild(meta);
     }
 
-    urlItem.innerHTML = html;
-    urlsContainer.appendChild(urlItem);
-  });
+    frag.appendChild(urlItem);
+  }
+
+  urlsContainer.appendChild(frag);
 
   // Display message if there are more than 20 URLs
   if (urls.length > 20) {
@@ -146,7 +157,9 @@ function displayUrlsList(urls) {
     moreItem.className = "url-item";
     moreItem.style.textAlign = "center";
     moreItem.style.color = "var(--color-muted)";
-    moreItem.innerHTML = `<em>... y ${urls.length - 20} URLs más</em>`;
+    const em = document.createElement("em");
+    em.textContent = `... y ${urls.length - 20} URLs más`;
+    moreItem.appendChild(em);
     urlsContainer.appendChild(moreItem);
   }
 }
@@ -165,15 +178,20 @@ function displayNonIndexedList(urls) {
   nonIndexedSection.classList.remove("hidden");
   nonIndexedContainer.innerHTML = "";
 
-  // Display up to 50 non-indexed URLs
+  // Display up to 50 non-indexed URLs using a fragment
   const displayUrls = urls.slice(0, 50);
-  displayUrls.forEach((u) => {
+  const frag = document.createDocumentFragment();
+  for (const u of displayUrls) {
     const urlItem = document.createElement("div");
     urlItem.className = "url-item non-indexed-item";
 
     const linkSpan = document.createElement("span");
     linkSpan.style.flex = "1";
-    linkSpan.innerHTML = `<a href="${u}" target="_blank">${u}</a>`;
+    const a = document.createElement("a");
+    a.href = u;
+    a.target = "_blank";
+    a.textContent = u;
+    linkSpan.appendChild(a);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn btn-delete";
@@ -192,15 +210,18 @@ function displayNonIndexedList(urls) {
 
     urlItem.appendChild(linkSpan);
     urlItem.appendChild(deleteBtn);
-    nonIndexedContainer.appendChild(urlItem);
-  });
+    frag.appendChild(urlItem);
+  }
+  nonIndexedContainer.appendChild(frag);
 
   if (urls.length > 50) {
     const moreItem = document.createElement("div");
     moreItem.className = "url-item";
     moreItem.style.textAlign = "center";
     moreItem.style.color = "var(--color-muted)";
-    moreItem.innerHTML = `<em>... y ${urls.length - 50} más</em>`;
+    const em = document.createElement("em");
+    em.textContent = `... y ${urls.length - 50} más`;
+    moreItem.appendChild(em);
     nonIndexedContainer.appendChild(moreItem);
   }
 }
