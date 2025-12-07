@@ -124,27 +124,72 @@ async function parseSitemap(sitemapUrl) {
 
 // Extract parsing logic into a separate function so we can parse text from any source
 function parseSitemapFromText(text) {
+  // Helper: safe text extraction
+  const getText = (node) => (node && typeof node.textContent === "string" ? node.textContent.trim() : "");
+
+  try {
+    // Prefer DOMParser when available (robust with whitespace, CDATA, namespaces)
+    if (typeof DOMParser === "function") {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(text, "application/xml");
+
+      // Detect parser errors (Firefox uses <parsererror>; Chrome sets documentElement to parsererror in some cases)
+      const isParserError =
+        !xml ||
+        !xml.documentElement ||
+        xml.documentElement.nodeName.toLowerCase() === "parsererror" ||
+        xml.getElementsByTagName("parsererror").length > 0;
+
+      if (!isParserError) {
+        // Collect <url> nodes irrespective of namespaces using localName
+        const allNodes = xml.getElementsByTagName("*");
+        const urlNodes = [];
+        for (let i = 0; i < allNodes.length; i++) {
+          if (allNodes[i].localName === "url") urlNodes.push(allNodes[i]);
+        }
+
+        const urls = [];
+        for (const urlNode of urlNodes) {
+          // Find <loc> and <lastmod> among children by localName
+          let loc = "";
+          let lastmod = "";
+          for (let i = 0; i < urlNode.childNodes.length; i++) {
+            const child = urlNode.childNodes[i];
+            if (!child || child.nodeType !== 1) continue; // element nodes only
+            if (child.localName === "loc") loc = getText(child);
+            else if (child.localName === "lastmod") lastmod = getText(child);
+          }
+          if (loc) urls.push({ loc, lastmod });
+        }
+
+        if (urls.length > 0) {
+          return {
+            success: true,
+            urls,
+            count: urls.length,
+            lastModified: urls.length > 0 ? urls[0].lastmod : "",
+          };
+        }
+        // If XML parsed but no <url> entries, continue to regex fallback below
+      }
+      // If parser error, fall through to regex fallback
+    }
+  } catch (_) {
+    // If DOMParser path fails for any reason, fall back to regex
+  }
+
+  // Fallback: legacy regex-based parsing (works for simple sitemaps)
   try {
     const urls = [];
-
-    // Regex for extracting <url> entries
     const urlRegex = /<url>([\s\S]*?)<\/url>/g;
     let match;
-
     while ((match = urlRegex.exec(text)) !== null) {
       const urlBlock = match[1];
-
-      // Extract loc
       const locMatch = /<loc>(.*?)<\/loc>/i.exec(urlBlock);
       const loc = locMatch ? locMatch[1].trim() : "";
-
-      // Extract lastmod
       const lastmodMatch = /<lastmod>(.*?)<\/lastmod>/i.exec(urlBlock);
       const lastmod = lastmodMatch ? lastmodMatch[1].trim() : "";
-
-      if (loc) {
-        urls.push({ loc, lastmod });
-      }
+      if (loc) urls.push({ loc, lastmod });
     }
 
     if (urls.length === 0) {
@@ -153,15 +198,12 @@ function parseSitemapFromText(text) {
 
     return {
       success: true,
-      urls: urls,
+      urls,
       count: urls.length,
       lastModified: urls.length > 0 ? urls[0].lastmod : "",
     };
   } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-    };
+    return { success: false, error: error.message };
   }
 }
 
