@@ -249,7 +249,7 @@ function updateBadgeFromResult(result, tabId) {
       result.status === "success" &&
       result.urlFound === false
     ) {
-      chrome.action.setBadgeText({ text: "●", tabId });
+      chrome.action.setBadgeText({ text: " ", tabId });
       chrome.action.setBadgeBackgroundColor({ color: "#FF0000", tabId });
     } else if (tabId != null) {
       chrome.action.setBadgeText({ text: "", tabId });
