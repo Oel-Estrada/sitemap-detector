@@ -1,6 +1,6 @@
 // DOM Elements
 // Centralized constants for styling/class IDs used in injected scripts
-const WARNING_BORDER_COLOR = "#f59e0b"; // Warning/amber color used for borders
+const WARNING_BORDER_COLOR = "#f44336"; // Red color used for non-indexed dot
 const LINK_WARNING_STYLE_ID = "sitemap-detector-link-warning-style";
 const LINK_WARNING_CLASS_NAME = "sitemap-detector-warning-link";
 const loadingDiv = document.getElementById("loading");
@@ -272,7 +272,20 @@ function applyLinkWarningBorder(tabId) {
             if (!style) {
               style = document.createElement("style");
               style.id = styleId;
-              style.textContent = `.${className} { border: 2px solid ${warningColor} !important; }`;
+              style.textContent = `
+                .${className} { position: relative !important; }
+                .${className}::after {
+                  content: "";
+                  display: inline-block;
+                  width: 8px;
+                  height: 8px;
+                  margin-left: 6px;
+                  background: ${warningColor};
+                  border-radius: 50%;
+                  vertical-align: middle;
+                  aspect-radio: 1
+                }
+              `;
               document.documentElement.appendChild(style);
             }
 
