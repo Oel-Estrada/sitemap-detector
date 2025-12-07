@@ -6,8 +6,6 @@ const statusBox = document.getElementById("status");
 const statusText = document.getElementById("status-text");
 const sitemapInfo = document.getElementById("sitemap-info");
 const urlDetails = document.getElementById("url-details");
-const sitemapList = document.getElementById("sitemap-list");
-const urlsContainer = document.getElementById("urls-container");
 const nonIndexedSection = document.getElementById("nonindexed-list");
 const nonIndexedContainer = document.getElementById("nonindexed-container");
 const errorSection = document.getElementById("error-section");
@@ -54,7 +52,6 @@ function displayStatus(result) {
     statusSection.classList.add("hidden");
     sitemapInfo.classList.add("hidden");
     urlDetails.classList.add("hidden");
-    sitemapList.classList.add("hidden");
 
     errorText.textContent = result.message;
     errorBox.className = "error-box";
@@ -93,14 +90,6 @@ function displayStatus(result) {
       urlDetails.classList.add("hidden");
     }
 
-    // Display list of URLs
-    if (result.allUrls && result.allUrls.length > 0) {
-      sitemapList.classList.remove("hidden");
-      displayUrlsList(result.allUrls);
-    } else {
-      sitemapList.classList.add("hidden");
-    }
-
     // Display accumulated non-indexed URLs (from background)
     if (result.nonIndexedUrls && result.nonIndexedUrls.length > 0) {
       nonIndexedSection.classList.remove("hidden");
@@ -113,57 +102,12 @@ function displayStatus(result) {
 }
 
 /**
- * Display a list of URLs
+ * Function to display the list of non-indexed URLs
  *
- * @param {Array} urls - The list of URL objects to display
+ * @param {string[]} urls - Array of non-indexed URLs
  *
  * @returns {void}
  */
-function displayUrlsList(urls) {
-  // Clear container once
-  urlsContainer.innerHTML = "";
-
-  // Display first 20 URLs using a fragment to reduce reflow
-  const displayUrls = urls.slice(0, 20);
-  const frag = document.createDocumentFragment();
-
-  for (const item of displayUrls) {
-    const urlItem = document.createElement("div");
-    urlItem.className = "url-item";
-
-    const link = document.createElement("a");
-    link.href = item.loc;
-    link.target = "_blank";
-    link.textContent = item.loc;
-    urlItem.appendChild(link);
-
-    if (item.lastmod) {
-      const meta = document.createElement("div");
-      meta.className = "url-meta";
-      const metaText = document.createElement("div");
-      metaText.textContent = `Actualización: ${formatDate(item.lastmod)}`;
-      meta.appendChild(metaText);
-      urlItem.appendChild(meta);
-    }
-
-    frag.appendChild(urlItem);
-  }
-
-  urlsContainer.appendChild(frag);
-
-  // Display message if there are more than 20 URLs
-  if (urls.length > 20) {
-    const moreItem = document.createElement("div");
-    moreItem.className = "url-item";
-    moreItem.style.textAlign = "center";
-    moreItem.style.color = "var(--color-muted)";
-    const em = document.createElement("em");
-    em.textContent = `... y ${urls.length - 20} URLs más`;
-    moreItem.appendChild(em);
-    urlsContainer.appendChild(moreItem);
-  }
-}
-
 function displayNonIndexedList(urls) {
   if (!nonIndexedContainer) return;
 

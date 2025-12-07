@@ -1,13 +1,13 @@
 # Sitemap Detector — Chrome Extension
 
-A lightweight Chrome extension that detects whether the current page URL appears in the site's XML sitemap and displays sitemap metadata and a preview of listed URLs.
+A lightweight Chrome extension that detects whether the current page URL appears in the site's XML sitemap and displays sitemap metadata.
 
 ## Features
 
 - Detects common sitemap locations (`/sitemap.xml`, `/sitemap_index.xml`) automatically
 - Parses sitemap XML and extracts URLs and `lastmod` metadata
 - Checks whether the active tab URL is present in the sitemap
-- Shows sitemap URL, total number of URLs, last modified date, and previews the first 20 URLs
+- Shows sitemap URL, total number of URLs, and last modified date
 - Simple popup UI with clear success/error states
 
 ## Installation
@@ -28,7 +28,6 @@ The extension will load and an icon will appear in the toolbar.
    - Whether the current URL is listed in the sitemap
    - Detected sitemap URL
    - Total URLs found and sitemap last modification date
-   - First 20 URLs from the sitemap (with `lastmod` where available)
 
 ## Project files
 
@@ -86,14 +85,13 @@ Tip: if you want a dark theme later, you can create an alternative block (for ex
 ## How it works
 
 1. The background service worker attempts to locate a sitemap by making `HEAD` requests to common sitemap paths.
-2. If a sitemap is found, the worker fetches its XML contents and extracts `<url>` entries using a lightweight parser.
+2. If a sitemap is found, the worker fetches its XML contents and extracts `<url>` entries using a robust XML parser (`DOMParser`) with a regex fallback.
 3. The extension compares the active tab URL with sitemap entries and returns the result to the popup for display.
 
 ## Limitations
 
 - Only supports publicly accessible XML sitemaps (no authentication or robots-restricted sitemaps)
-- The extension limits the preview to the first 20 sitemap entries to keep the UI responsive
-- Parsing is done with a simple text-based extractor (works for well-formed sitemaps). Very large or non-standard sitemap formats may not parse correctly.
+- Very large or non-standard sitemap formats may not parse correctly.
 
 ## Cross-browser compatibility
 

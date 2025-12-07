@@ -316,7 +316,6 @@ async function processSitemapRequest(tabUrl, tabId) {
       urlDetails: urlInSitemap,
       totalUrls: sitemapData.count,
       lastModified: sitemapData.lastModified,
-      allUrls: sitemapData.urls,
       hasError: false,
     };
   } catch (error) {
