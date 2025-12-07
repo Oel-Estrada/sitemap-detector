@@ -249,8 +249,22 @@ function updateBadgeFromResult(result, tabId) {
       result.status === "success" &&
       result.urlFound === false
     ) {
-      chrome.action.setBadgeText({ text: " ", tabId });
+      chrome.action.setBadgeText({ text: "1", tabId });
       chrome.action.setBadgeBackgroundColor({ color: "#FF0000", tabId });
+      // Ensure badge text is white for readability (supports Manifest V3 API)
+      try {
+        if (typeof chrome.action.setBadgeTextColor === "function") {
+          chrome.action.setBadgeTextColor({ color: "#FFFFFF", tabId });
+        } else if (
+          chrome.browserAction &&
+          typeof chrome.browserAction.setBadgeTextColor === "function"
+        ) {
+          // Fallback for older APIs (if present)
+          chrome.browserAction.setBadgeTextColor({ color: "#FFFFFF", tabId });
+        }
+      } catch (e) {
+        // Ignore if API not available in this browser/version
+      }
     } else if (tabId != null) {
       chrome.action.setBadgeText({ text: "", tabId });
     }
