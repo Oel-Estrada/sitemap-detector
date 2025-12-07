@@ -136,3 +136,50 @@ h2 {
 .hidden {
     display: none;
 }
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #333;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn.primary {
+    background: linear-gradient(180deg, #6c5ce7, #5a4bd6);
+    color: #fff;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.btn:hover {
+    filter: brightness(0.98);
+}
+
+/* Export output textbox */
+#export-output {
+    font-family: monospace;
+    font-size: 12px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    resize: vertical;
+}
+
+.export-controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+#export-result > div {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}

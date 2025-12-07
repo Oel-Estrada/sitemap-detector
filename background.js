@@ -226,6 +226,15 @@ async function processSitemapRequest(tabUrl, tabId) {
  * Listen for messages from popup.js to process sitemap checks
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Export non-indexed URLs as sitemap <url> blocks
+  if (request.action === "exportNonIndexed") {
+    const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
+    const text = exportNonIndexedUrls(tabId, request.lastmod);
+    sendResponse({ success: true, exportText: text });
+
+    return false; // response sent synchronously
+  }
+
   if (request.action === "checkSitemap") {
     processSitemapRequest(request.url, request.tabId).then((result) => {
       // Delegate badge updates to the helper so behavior is consistent
@@ -352,6 +361,48 @@ function removeNonIndexedUrl(tabId, url) {
 function getNonIndexedList(tabId) {
   const set = nonIndexedByTab.get(tabId);
   return set ? Array.from(set) : [];
+}
+
+/**
+ * Export non-indexed URLs for a tab as sitemap <url> blocks
+ *
+ * @param {number} tabId - The tab id whose non-indexed list to export
+ * @param {string} lastmodInput - Optional date string (e.g. YYYY-MM-DD). If invalid, today's date is used.
+ * @returns {string} XML fragment containing <url> entries (no wrapper)
+ */
+function exportNonIndexedUrls(tabId, lastmodInput) {
+  const set = nonIndexedByTab.get(tabId);
+  if (!set || set.size === 0) return "";
+
+  // Helper to produce timestamp like: 2025-05-13T22:21:07+00:00
+  function formatWithOffset(d) {
+    // Use UTC time and append +00:00
+    // Remove milliseconds and trailing Z
+    return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+  }
+
+  let ts = null;
+  if (lastmodInput) {
+    const parsed = new Date(lastmodInput);
+    if (!isNaN(parsed.getTime())) {
+      ts = formatWithOffset(parsed);
+    }
+  }
+  if (!ts) ts = formatWithOffset(new Date());
+
+  const urls = Array.from(set);
+  const entries = urls
+    .map((u) => {
+      return [
+        "    <url>",
+        `      <loc>${u}</loc>`,
+        `      <lastmod>${ts}</lastmod>`,
+        "    </url>",
+      ].join("\n");
+    })
+    .join("\n");
+
+  return entries;
 }
 
 function updateBadgeFromResult(result, tabId) {

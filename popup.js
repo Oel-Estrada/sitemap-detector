@@ -13,6 +13,12 @@ const nonIndexedContainer = document.getElementById("nonindexed-container");
 const errorSection = document.getElementById("error-section");
 const errorBox = document.getElementById("error");
 const errorText = document.getElementById("error-text");
+// Export controls
+const exportBtn = document.getElementById("export-btn");
+const exportResult = document.getElementById("export-result");
+const exportOutput = document.getElementById("export-output");
+const copyBtn = document.getElementById("copy-btn");
+// (removed duplicate exportLastmod reference)
 
 /**
  * Function to format dates
@@ -122,7 +128,6 @@ function displayUrlsList(urls) {
   displayUrls.forEach((item, index) => {
     const urlItem = document.createElement("div");
     urlItem.className = "url-item";
-
     let html = `<a href="${item.loc}" target="_blank">${item.loc}</a>`;
 
     if (item.lastmod) {
@@ -182,6 +187,8 @@ async function init() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentUrl = tabs[0].url;
   const tabId = tabs[0].id;
+  // store current tabId for other actions
+  window._currentTabId = tabId;
 
   // Send message to background to process the sitemap (include tabId for CORS fallback)
   chrome.runtime.sendMessage(
@@ -194,3 +201,36 @@ async function init() {
 
 // Initialize when the popup loads
 init();
+
+// Export button handler
+if (exportBtn) {
+  exportBtn.addEventListener("click", () => {
+    const tabId = window._currentTabId;
+    chrome.runtime.sendMessage(
+      { action: "exportNonIndexed", tabId },
+      (resp) => {
+        if (resp && resp.success) {
+          exportOutput.value = resp.exportText || "";
+          exportResult.classList.remove("hidden");
+        } else {
+          exportOutput.value = "";
+          exportResult.classList.add("hidden");
+          alert("No hay URLs para exportar");
+        }
+      }
+    );
+  });
+}
+
+// Copy button handler
+if (copyBtn) {
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(exportOutput.value || "");
+      copyBtn.textContent = "Copiado";
+      setTimeout(() => (copyBtn.textContent = "Copiar al portapapeles"), 1500);
+    } catch (e) {
+      alert("Error copiando al portapapeles");
+    }
+  });
+}
