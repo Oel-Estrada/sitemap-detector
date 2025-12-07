@@ -148,10 +148,11 @@ async function pageFetchSitemap(sitemapUrl, tabId) {
  * @returns {Object|null} The sitemap URL object if found, otherwise null
  */
 function isUrlInSitemap(currentUrl, sitemapUrls) {
-  const cleanCurrentUrl = currentUrl.replace(/\/$/, "");
+  // Remove query parameters and fragments, then remove trailing slashes
+  const cleanCurrentUrl = removeUrlParameters(currentUrl).replace(/\/$/, "");
 
   for (let item of sitemapUrls) {
-    const cleanSitemapUrl = item.loc.replace(/\/$/, "");
+    const cleanSitemapUrl = removeUrlParameters(item.loc).replace(/\/$/, "");
     if (cleanSitemapUrl === cleanCurrentUrl) {
       return item;
     }
@@ -247,6 +248,23 @@ const lastProcessedUrlByTab = new Map();
 const nonIndexedByTab = new Map();
 
 /**
+ * Remove query parameters and fragments from a URL
+ *
+ * @param {string} url - The URL to clean
+ *
+ * @returns {string} The URL without query parameters or fragments
+ */
+function removeUrlParameters(url) {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.origin + urlObj.pathname;
+  } catch (e) {
+    // Fallback: simple string split if URL parsing fails
+    return url.split("?")[0].split("#")[0];
+  }
+}
+
+/**
  * Add a non-indexed URL to the tracking set for a given tab
  *
  * @param {number} tabId - The ID of the tab
@@ -257,12 +275,15 @@ const nonIndexedByTab = new Map();
 function addNonIndexedUrl(tabId, url) {
   try {
     if (!tabId || !url) return;
+    // Remove query parameters and fragments before storing
+    const cleanUrl = removeUrlParameters(url);
+
     let set = nonIndexedByTab.get(tabId);
     if (!set) {
       set = new Set();
       nonIndexedByTab.set(tabId, set);
     }
-    set.add(url);
+    set.add(cleanUrl);
 
     const count = set.size;
     chrome.action.setBadgeText({ text: String(count), tabId });
@@ -299,7 +320,8 @@ function removeNonIndexedUrl(tabId, url) {
     if (!tabId) return;
     const set = nonIndexedByTab.get(tabId);
     if (!set) return;
-    if (url) set.delete(url);
+    // Clean URL parameters before removing
+    if (url) set.delete(removeUrlParameters(url));
 
     if (set.size === 0) {
       nonIndexedByTab.delete(tabId);
