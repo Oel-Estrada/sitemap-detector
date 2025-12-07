@@ -230,6 +230,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // Delegate badge updates to the helper so behavior is consistent
       const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
       updateBadgeFromResult(result, tabId);
+      // Include current non-indexed list for the tab so popup can display it
+      result.nonIndexedUrls = getNonIndexedList(tabId);
       sendResponse(result);
     });
 
@@ -241,32 +243,134 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Keep track of last-processed URL per tab to avoid redundant work
 const lastProcessedUrlByTab = new Map();
 
+// Keep track of non-indexed URLs per tab (tabId -> Set of URLs)
+const nonIndexedByTab = new Map();
+
+/**
+ * Add a non-indexed URL to the tracking set for a given tab
+ *
+ * @param {number} tabId - The ID of the tab
+ * @param {string} url - The URL to add
+ *
+ * @returns {void}
+ */
+function addNonIndexedUrl(tabId, url) {
+  try {
+    if (!tabId || !url) return;
+    let set = nonIndexedByTab.get(tabId);
+    if (!set) {
+      set = new Set();
+      nonIndexedByTab.set(tabId, set);
+    }
+    set.add(url);
+
+    const count = set.size;
+    chrome.action.setBadgeText({ text: String(count), tabId });
+    chrome.action.setBadgeBackgroundColor({ color: "#FF0000", tabId });
+
+    // Ensure badge text is white for readability
+    try {
+      if (typeof chrome.action.setBadgeTextColor === "function") {
+        chrome.action.setBadgeTextColor({ color: "#FFFFFF", tabId });
+      } else if (
+        chrome.browserAction &&
+        typeof chrome.browserAction.setBadgeTextColor === "function"
+      ) {
+        chrome.browserAction.setBadgeTextColor({ color: "#FFFFFF", tabId });
+      }
+    } catch (e) {
+      // ignore
+    }
+  } catch (e) {
+    console.error("Error adding non-indexed URL:", e);
+  }
+}
+
+/**
+ * Remove a non-indexed URL from the tracking set for a given tab
+ *
+ * @param {number} tabId - The ID of the tab
+ * @param {string} url - The URL to remove
+ *
+ * @returns {void}
+ */
+function removeNonIndexedUrl(tabId, url) {
+  try {
+    if (!tabId) return;
+    const set = nonIndexedByTab.get(tabId);
+    if (!set) return;
+    if (url) set.delete(url);
+
+    if (set.size === 0) {
+      nonIndexedByTab.delete(tabId);
+      try {
+        chrome.action.setBadgeText({ text: "", tabId });
+      } catch (error) {
+        // Ignore errors
+      }
+    } else {
+      try {
+        chrome.action.setBadgeText({ text: String(set.size), tabId });
+      } catch (error) {
+        console.error("Error updating badge text:", e);
+      }
+    }
+  } catch (error) {
+    console.error("Error removing non-indexed URL:", error);
+  }
+}
+
+/**
+ * Get the list of non-indexed URLs for a given tab
+ *
+ * @param {number} tabId - The ID of the tab
+ *
+ * @returns {Array<string>} The list of non-indexed URLs
+ */
+function getNonIndexedList(tabId) {
+  const set = nonIndexedByTab.get(tabId);
+  return set ? Array.from(set) : [];
+}
+
 function updateBadgeFromResult(result, tabId) {
   try {
+    // If URL is not found in the sitemap, add it to the non-indexed set for the tab
     if (
       tabId != null &&
       !result.hasError &&
       result.status === "success" &&
       result.urlFound === false
     ) {
-      chrome.action.setBadgeText({ text: "1", tabId });
-      chrome.action.setBadgeBackgroundColor({ color: "#FF0000", tabId });
-      // Ensure badge text is white for readability (supports Manifest V3 API)
-      try {
-        if (typeof chrome.action.setBadgeTextColor === "function") {
-          chrome.action.setBadgeTextColor({ color: "#FFFFFF", tabId });
-        } else if (
-          chrome.browserAction &&
-          typeof chrome.browserAction.setBadgeTextColor === "function"
-        ) {
-          // Fallback for older APIs (if present)
-          chrome.browserAction.setBadgeTextColor({ color: "#FFFFFF", tabId });
-        }
-      } catch (e) {
-        // Ignore if API not available in this browser/version
-      }
+      addNonIndexedUrl(tabId, result.currentUrl);
+
+      // Nothing else to do here (badge updated by addNonIndexedUrl)
+    } else if (
+      tabId != null &&
+      !result.hasError &&
+      result.status === "success" &&
+      result.urlFound === true
+    ) {
+      // If URL is found in sitemap, ensure it's removed from the non-indexed set
+      removeNonIndexedUrl(tabId, result.currentUrl);
     } else if (tabId != null) {
-      chrome.action.setBadgeText({ text: "", tabId });
+      // For other cases (errors or unknown), keep existing non-indexed list but
+      // clear badge if no entries remain
+      const count = nonIndexedByTab.get(tabId)
+        ? nonIndexedByTab.get(tabId).size
+        : 0;
+      if (count === 0) {
+        try {
+          chrome.action.setBadgeText({ text: "", tabId });
+        } catch (error) {
+          // Ignore errors
+        }
+      } else {
+        try {
+          chrome.action.setBadgeText({ text: String(count), tabId });
+        } catch (error) {
+          // Ignore errors
+        }
+      }
     }
   } catch (error) {
     console.error("Error setting badge:", error);
@@ -310,9 +414,10 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 // Clean up when a tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   lastProcessedUrlByTab.delete(tabId);
+  nonIndexedByTab.delete(tabId);
   try {
     chrome.action.setBadgeText({ text: "", tabId });
-  } catch (e) {
-    // ignore
+  } catch (error) {
+    // Ignore errors
   }
 });

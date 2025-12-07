@@ -8,6 +8,8 @@ const sitemapInfo = document.getElementById("sitemap-info");
 const urlDetails = document.getElementById("url-details");
 const sitemapList = document.getElementById("sitemap-list");
 const urlsContainer = document.getElementById("urls-container");
+const nonIndexedSection = document.getElementById("nonindexed-list");
+const nonIndexedContainer = document.getElementById("nonindexed-container");
 const errorSection = document.getElementById("error-section");
 const errorBox = document.getElementById("error");
 const errorText = document.getElementById("error-text");
@@ -92,6 +94,15 @@ function displayStatus(result) {
     } else {
       sitemapList.classList.add("hidden");
     }
+
+    // Display accumulated non-indexed URLs (from background)
+    if (result.nonIndexedUrls && result.nonIndexedUrls.length > 0) {
+      nonIndexedSection.classList.remove("hidden");
+      displayNonIndexedList(result.nonIndexedUrls);
+    } else {
+      nonIndexedSection.classList.add("hidden");
+      if (nonIndexedContainer) nonIndexedContainer.innerHTML = "";
+    }
   }
 }
 
@@ -132,6 +143,29 @@ function displayUrlsList(urls) {
     moreItem.style.color = "#999";
     moreItem.innerHTML = `<em>... y ${urls.length - 20} URLs más</em>`;
     urlsContainer.appendChild(moreItem);
+  }
+}
+
+function displayNonIndexedList(urls) {
+  if (!nonIndexedContainer) return;
+  nonIndexedContainer.innerHTML = "";
+
+  // Display up to 50 non-indexed URLs
+  const displayUrls = urls.slice(0, 50);
+  displayUrls.forEach((u) => {
+    const urlItem = document.createElement("div");
+    urlItem.className = "url-item";
+    urlItem.innerHTML = `<a href="${u}" target="_blank">${u}</a>`;
+    nonIndexedContainer.appendChild(urlItem);
+  });
+
+  if (urls.length > 50) {
+    const moreItem = document.createElement("div");
+    moreItem.className = "url-item";
+    moreItem.style.textAlign = "center";
+    moreItem.style.color = "#999";
+    moreItem.innerHTML = `<em>... y ${urls.length - 50} más</em>`;
+    nonIndexedContainer.appendChild(moreItem);
   }
 }
 
