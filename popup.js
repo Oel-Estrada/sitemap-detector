@@ -153,6 +153,16 @@ function displayUrlsList(urls) {
 
 function displayNonIndexedList(urls) {
   if (!nonIndexedContainer) return;
+
+  // If no URLs, hide the entire section
+  if (!urls || urls.length === 0) {
+    nonIndexedSection.classList.add("hidden");
+    nonIndexedContainer.innerHTML = "";
+    return;
+  }
+
+  // Show the section if there are URLs
+  nonIndexedSection.classList.remove("hidden");
   nonIndexedContainer.innerHTML = "";
 
   // Display up to 50 non-indexed URLs
@@ -174,7 +184,8 @@ function displayNonIndexedList(urls) {
         { action: "removeNonIndexedUrl", url: u, tabId: window._currentTabId },
         () => {
           // Refresh the list after deletion
-          displayNonIndexedList(urls.filter((url) => url !== u));
+          const updatedUrls = urls.filter((url) => url !== u);
+          displayNonIndexedList(updatedUrls);
         }
       );
     });
