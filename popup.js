@@ -145,7 +145,7 @@ function displayUrlsList(urls) {
     const moreItem = document.createElement("div");
     moreItem.className = "url-item";
     moreItem.style.textAlign = "center";
-    moreItem.style.color = "#999";
+    moreItem.style.color = "var(--color-muted)";
     moreItem.innerHTML = `<em>... y ${urls.length - 20} URLs más</em>`;
     urlsContainer.appendChild(moreItem);
   }
@@ -199,7 +199,7 @@ function displayNonIndexedList(urls) {
     const moreItem = document.createElement("div");
     moreItem.className = "url-item";
     moreItem.style.textAlign = "center";
-    moreItem.style.color = "#999";
+    moreItem.style.color = "var(--color-muted)";
     moreItem.innerHTML = `<em>... y ${urls.length - 50} más</em>`;
     nonIndexedContainer.appendChild(moreItem);
   }

@@ -13,6 +13,11 @@ if (
   globalThis.browser = globalThis.chrome;
 }
 
+// Centralized color references for UI elements controlled from background (no CSS vars available here)
+// Keep these aligned with popup.css :root palette when possible.
+const BADGE_BG_COLOR = "#f44336";   // matches --color-error
+const BADGE_TEXT_COLOR = "#ffffff"; // matches --color-white
+
 async function getSitemapUrl(hostname) {
   const possibleSitemapUrls = [
     `https://${hostname}/sitemap.xml`,
@@ -305,17 +310,17 @@ function addNonIndexedUrl(tabId, url) {
 
     const count = set.size;
     chrome.action.setBadgeText({ text: String(count), tabId });
-    chrome.action.setBadgeBackgroundColor({ color: "#FF0000", tabId });
+    chrome.action.setBadgeBackgroundColor({ color: BADGE_BG_COLOR, tabId });
 
     // Ensure badge text is white for readability
     try {
       if (typeof chrome.action.setBadgeTextColor === "function") {
-        chrome.action.setBadgeTextColor({ color: "#FFFFFF", tabId });
+        chrome.action.setBadgeTextColor({ color: BADGE_TEXT_COLOR, tabId });
       } else if (
         chrome.browserAction &&
         typeof chrome.browserAction.setBadgeTextColor === "function"
       ) {
-        chrome.browserAction.setBadgeTextColor({ color: "#FFFFFF", tabId });
+        chrome.browserAction.setBadgeTextColor({ color: BADGE_TEXT_COLOR, tabId });
       }
     } catch (e) {
       // ignore
