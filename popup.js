@@ -1,0 +1,161 @@
+// DOM Elements
+const loadingDiv = document.getElementById("loading");
+const contentDiv = document.getElementById("content");
+const statusSection = document.getElementById("status-section");
+const statusBox = document.getElementById("status");
+const statusText = document.getElementById("status-text");
+const sitemapInfo = document.getElementById("sitemap-info");
+const urlDetails = document.getElementById("url-details");
+const sitemapList = document.getElementById("sitemap-list");
+const urlsContainer = document.getElementById("urls-container");
+const errorSection = document.getElementById("error-section");
+const errorBox = document.getElementById("error");
+const errorText = document.getElementById("error-text");
+
+/**
+ * Function to format dates
+ *
+ * @param {string} dateString - The date string to format
+ *
+ * @returns {string} The formatted date string
+ */
+function formatDate(dateString) {
+  if (!dateString) return "No especificada";
+  const date = new Date(dateString);
+  return date.toLocaleDateString("es-ES", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/**
+ * Function to display the status information
+ *
+ * @param {Object} result - The result object from the background script
+ *
+ * @returns {void}
+ */
+function displayStatus(result) {
+  contentDiv.classList.remove("hidden");
+  loadingDiv.classList.add("hidden");
+
+  if (result.hasError) {
+    // Display error
+    errorSection.classList.remove("hidden");
+    statusSection.classList.add("hidden");
+    sitemapInfo.classList.add("hidden");
+    urlDetails.classList.add("hidden");
+    sitemapList.classList.add("hidden");
+
+    errorText.textContent = result.message;
+    errorBox.className = "error-box";
+  } else {
+    // Display sitemap information
+    errorSection.classList.add("hidden");
+    statusSection.classList.remove("hidden");
+    sitemapInfo.classList.remove("hidden");
+
+    // Update status box
+    if (result.urlFound) {
+      statusBox.className = "status-box found";
+      statusText.innerHTML = "<strong>✓ URL encontrada en el sitemap</strong>";
+    } else {
+      statusBox.className = "status-box not-found";
+      statusText.innerHTML =
+        "<strong>✗ URL no encontrada en el sitemap</strong>";
+    }
+
+    // Display sitemap information
+    document.getElementById("sitemap-url").textContent = result.sitemapUrl;
+    document.getElementById("url-count").textContent = result.totalUrls;
+    document.getElementById("last-mod").textContent = formatDate(
+      result.lastModified
+    );
+
+    // If the URL was found, display details
+    if (result.urlFound && result.urlDetails) {
+      urlDetails.classList.remove("hidden");
+      document.getElementById("url-location").textContent =
+        result.urlDetails.loc;
+      document.getElementById("url-lastmod").textContent = formatDate(
+        result.urlDetails.lastmod
+      );
+    } else {
+      urlDetails.classList.add("hidden");
+    }
+
+    // Display list of URLs
+    if (result.allUrls && result.allUrls.length > 0) {
+      sitemapList.classList.remove("hidden");
+      displayUrlsList(result.allUrls);
+    } else {
+      sitemapList.classList.add("hidden");
+    }
+  }
+}
+
+/**
+ * Display a list of URLs
+ *
+ * @param {Array} urls - The list of URL objects to display
+ *
+ * @returns {void}
+ */
+function displayUrlsList(urls) {
+  urlsContainer.innerHTML = "";
+
+  // Display first 20 URLs
+  const displayUrls = urls.slice(0, 20);
+
+  displayUrls.forEach((item, index) => {
+    const urlItem = document.createElement("div");
+    urlItem.className = "url-item";
+
+    let html = `<a href="${item.loc}" target="_blank">${item.loc}</a>`;
+
+    if (item.lastmod) {
+      html += '<div class="url-meta">';
+      html += `<div>Actualización: ${formatDate(item.lastmod)}</div>`;
+      html += "</div>";
+    }
+
+    urlItem.innerHTML = html;
+    urlsContainer.appendChild(urlItem);
+  });
+
+  // Display message if there are more than 20 URLs
+  if (urls.length > 20) {
+    const moreItem = document.createElement("div");
+    moreItem.className = "url-item";
+    moreItem.style.textAlign = "center";
+    moreItem.style.color = "#999";
+    moreItem.innerHTML = `<em>... y ${urls.length - 20} URLs más</em>`;
+    urlsContainer.appendChild(moreItem);
+  }
+}
+
+/**
+ * Initialize the popup
+ *
+ * @returns {void}
+ */
+async function init() {
+  loadingDiv.classList.remove("hidden");
+  contentDiv.classList.add("hidden");
+
+  // Get the current URL
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentUrl = tabs[0].url;
+
+  // Send message to background to process the sitemap
+  chrome.runtime.sendMessage(
+    { action: "checkSitemap", url: currentUrl },
+    (response) => {
+      displayStatus(response);
+    }
+  );
+}
+
+// Initialize when the popup loads
+init();

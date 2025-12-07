@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sitemap Detector</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Sitemap Detector</h1>
+        
+        <div id="loading" class="loading hidden">
+            <p>Cargando información del sitemap...</p>
+        </div>
+        
+        <div id="content" class="hidden">
+            <div id="status-section">
+                <h2>Estado de la URL</h2>
+                <div id="status" class="status-box">
+                    <p id="status-text"></p>
+                </div>
+            </div>
+
+            <div id="sitemap-info" class="hidden">
+                <h2>Información del Sitemap</h2>
+                <div class="info-box">
+                    <p><strong>URL del Sitemap:</strong> <span id="sitemap-url"></span></p>
+                    <p><strong>Total de URLs:</strong> <span id="url-count"></span></p>
+                    <p><strong>Última actualización:</strong> <span id="last-mod"></span></p>
+                </div>
+            </div>
+
+            <div id="url-details" class="hidden">
+                <h2>Detalles de la URL Actual</h2>
+                <div class="info-box">
+                    <p><strong>Ubicación:</strong> <span id="url-location"></span></p>
+                    <p><strong>Última modificación:</strong> <span id="url-lastmod"></span></p>
+                </div>
+            </div>
+
+            <div id="sitemap-list" class="hidden">
+                <h2>URLs en el Sitemap</h2>
+                <div id="urls-container" class="urls-list"></div>
+            </div>
+
+            <div id="error-section" class="hidden">
+                <div id="error" class="error-box">
+                    <p id="error-text"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
