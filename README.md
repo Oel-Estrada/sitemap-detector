@@ -42,6 +42,47 @@ The extension will load and an icon will appear in the toolbar.
 └── README.md            # This file
 ```
 
+## Color palette (change colors in one place)
+
+The UI uses centralized CSS variables in `:root` inside `popup.css`. Changing these values lets you update the entire theme from a single place.
+
+Example (excerpt from `popup.css`):
+
+```
+:root {
+  --color-primary: #667eea;
+  --color-secondary: #764ba2;
+  --color-text: #333333;
+  --color-surface: #f5f5f5;
+  --color-surface-contrast: #ffffff;
+  --color-border: #dddddd;
+  --color-border-soft: #eeeeee;
+  --color-border-strong: #cccccc;
+  --color-muted: #999999;
+  --color-link: var(--color-primary);
+  /* States */
+  --color-success: #4caf50;          /* success border/state */
+  --color-success-bg: #e8f5e9;       /* success background */
+  --color-error: #f44336;            /* error border/state */
+  --color-error-bg: #ffebee;         /* error background */
+  --color-warning: #ff9800;          /* warning border/state */
+  --color-warning-bg: #fff3e0;       /* warning background */
+  /* Gradients (app background and primary button) */
+  --gradient-app-start: #667eea;
+  --gradient-app-end: #764ba2;
+  --gradient-btn-primary-start: #6c5ce7;
+  --gradient-btn-primary-end: #5a4bd6;
+}
+```
+
+How to change the primary color:
+
+1. Open `popup.css`.
+2. In the `:root` section, modify `--color-primary` and, if you want, `--gradient-app-*` to adjust the background gradient.
+3. Save and reload the extension at `chrome://extensions/`.
+
+Tip: if you want a dark theme later, you can create an alternative block (for example, with a `.theme-dark` class on `<body>`) redefining these variables.
+
 ## How it works
 
 1. The background service worker attempts to locate a sitemap by making `HEAD` requests to common sitemap paths.
