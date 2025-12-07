@@ -5,6 +5,14 @@
  *
  * @returns {string|null} The URL of the sitemap if found, otherwise null
  */
+// Compatibility: create `browser` alias when not present (minimal cross-browser support)
+if (
+  typeof globalThis.browser === "undefined" &&
+  typeof globalThis.chrome !== "undefined"
+) {
+  globalThis.browser = globalThis.chrome;
+}
+
 async function getSitemapUrl(hostname) {
   const possibleSitemapUrls = [
     `https://${hostname}/sitemap.xml`,
@@ -18,7 +26,7 @@ async function getSitemapUrl(hostname) {
         return sitemapUrl;
       }
     } catch (error) {
-      // Continuar con la siguiente URL
+      // Ignore fetch errors for HEAD requests
     }
   }
 
@@ -33,6 +41,7 @@ async function getSitemapUrl(hostname) {
  * @returns {Object} An object containing the parsing result and URLs
  */
 async function parseSitemap(sitemapUrl) {
+  // Try a normal fetch first; if it fails, the caller can try a page-context fetch
   try {
     const response = await fetch(sitemapUrl);
     if (!response.ok) {
@@ -40,6 +49,18 @@ async function parseSitemap(sitemapUrl) {
     }
 
     const text = await response.text();
+    return parseSitemapFromText(text);
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+// Extract parsing logic into a separate function so we can parse text from any source
+function parseSitemapFromText(text) {
+  try {
     const urls = [];
 
     // Regex for extracting <url> entries
@@ -58,10 +79,7 @@ async function parseSitemap(sitemapUrl) {
       const lastmod = lastmodMatch ? lastmodMatch[1].trim() : "";
 
       if (loc) {
-        urls.push({
-          loc,
-          lastmod,
-        });
+        urls.push({ loc, lastmod });
       }
     }
 
@@ -80,6 +98,44 @@ async function parseSitemap(sitemapUrl) {
       success: false,
       error: error.message,
     };
+  }
+}
+
+// Page-context fetch fallback using scripting.executeScript
+async function pageFetchSitemap(sitemapUrl, tabId) {
+  if (!tabId) {
+    return {
+      success: false,
+      error: "No tabId provided for page-context fallback",
+    };
+  }
+
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async (url) => {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) return { success: false, error: `HTTP ${resp.status}` };
+          const text = await resp.text();
+          return { success: true, text };
+        } catch (e) {
+          return {
+            success: false,
+            error: e && e.message ? e.message : String(e),
+          };
+        }
+      },
+      args: [sitemapUrl],
+    });
+
+    if (!results || results.length === 0) {
+      return { success: false, error: "No result from page fetch" };
+    }
+
+    return results[0].result;
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 }
 
@@ -111,7 +167,7 @@ function isUrlInSitemap(currentUrl, sitemapUrls) {
  *
  * @returns {Object} The result object containing sitemap information
  */
-async function processSitemapRequest(tabUrl) {
+async function processSitemapRequest(tabUrl, tabId) {
   try {
     const url = new URL(tabUrl);
     const hostname = url.hostname;
@@ -125,7 +181,15 @@ async function processSitemapRequest(tabUrl) {
       };
     }
 
-    const sitemapData = await parseSitemap(sitemapUrl);
+    let sitemapData = await parseSitemap(sitemapUrl);
+
+    // If direct fetch failed (likely CORS), try page-context fallback when tabId is available
+    if (!sitemapData.success && tabId) {
+      const pageFetchResult = await pageFetchSitemap(sitemapUrl, tabId);
+      if (pageFetchResult && pageFetchResult.success && pageFetchResult.text) {
+        sitemapData = parseSitemapFromText(pageFetchResult.text);
+      }
+    }
 
     if (!sitemapData.success) {
       return {
@@ -162,7 +226,7 @@ async function processSitemapRequest(tabUrl) {
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "checkSitemap") {
-    processSitemapRequest(request.url).then((result) => {
+    processSitemapRequest(request.url, request.tabId).then((result) => {
       sendResponse(result);
     });
 

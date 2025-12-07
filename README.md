@@ -54,6 +54,18 @@ The extension will load and an icon will appear in the toolbar.
 - The extension limits the preview to the first 20 sitemap entries to keep the UI responsive
 - Parsing is done with a simple text-based extractor (works for well-formed sitemaps). Very large or non-standard sitemap formats may not parse correctly.
 
+## Cross-browser compatibility
+
+- Manifest: This extension uses Manifest V3 which is supported by Chromium-based browsers (Chrome, Edge, Brave, Opera). Firefox has added MV3 support in recent versions but there are behavioral differences; the project includes a minimal `browser_specific_settings` entry to help Firefox identify the add-on and require a recent Gecko version.
+- Firefox install: to load temporarily for testing open `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on" and select the `manifest.json` file from this project. Use Firefox 109+ for better MV3 service worker support.
+- Chrome/Edge install: open `chrome://extensions/` (or `edge://extensions/`), enable Developer mode, click "Load unpacked" and select this project folder.
+
+## CORS and sitemap fetching
+
+- The background service worker performs `HEAD` and `GET` requests to common sitemap locations. Some sites explicitly block cross-origin requests to their sitemap files with CORS restrictions. When that happens the extension cannot read the sitemap from the service worker directly.
+- Recommended fallback (not implemented by default): perform the fetch from the page context using `scripting.executeScript` (or a content script) so the request originates from the page's origin; the page can then relay the sitemap contents back to the service worker. This approach is more complex and was left as an optional enhancement to preserve user privacy and code simplicity.
+- Avoid using third-party proxies to bypass CORS in production because it exposes the user's browsing target and content to the proxy provider.
+
 ## Permissions
 
 - `activeTab` — to read the active tab URL

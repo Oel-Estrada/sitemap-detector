@@ -147,10 +147,11 @@ async function init() {
   // Get the current URL
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentUrl = tabs[0].url;
+  const tabId = tabs[0].id;
 
-  // Send message to background to process the sitemap
+  // Send message to background to process the sitemap (include tabId for CORS fallback)
   chrome.runtime.sendMessage(
-    { action: "checkSitemap", url: currentUrl },
+    { action: "checkSitemap", url: currentUrl, tabId },
     (response) => {
       displayStatus(response);
     }
