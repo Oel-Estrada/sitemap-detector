@@ -227,9 +227,78 @@ async function processSitemapRequest(tabUrl, tabId) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "checkSitemap") {
     processSitemapRequest(request.url, request.tabId).then((result) => {
+      // Delegate badge updates to the helper so behavior is consistent
+      const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
+      updateBadgeFromResult(result, tabId);
       sendResponse(result);
     });
 
     return true; // Indicate that we will send a response asynchronously
+  }
+});
+
+// --- Automatic badge update helpers and listeners ---
+// Keep track of last-processed URL per tab to avoid redundant work
+const lastProcessedUrlByTab = new Map();
+
+function updateBadgeFromResult(result, tabId) {
+  try {
+    if (
+      tabId != null &&
+      !result.hasError &&
+      result.status === "success" &&
+      result.urlFound === false
+    ) {
+      chrome.action.setBadgeText({ text: "●", tabId });
+      chrome.action.setBadgeBackgroundColor({ color: "#FF0000", tabId });
+    } else if (tabId != null) {
+      chrome.action.setBadgeText({ text: "", tabId });
+    }
+  } catch (error) {
+    console.error("Error setting badge:", error);
+  }
+}
+
+async function checkTabAndUpdate(tabId, url) {
+  if (!url || !/^https?:\/\//i.test(url)) return;
+
+  const last = lastProcessedUrlByTab.get(tabId);
+  if (last === url) return; // no change
+  lastProcessedUrlByTab.set(tabId, url);
+
+  try {
+    const result = await processSitemapRequest(url, tabId);
+    updateBadgeFromResult(result, tabId);
+  } catch (e) {
+    console.error("Error processing sitemap for tab:", e);
+  }
+}
+
+// When a tab completes loading (or its URL changes), run the check
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // If the URL changed or the load completed, check sitemap
+  if (changeInfo.url) {
+    checkTabAndUpdate(tabId, changeInfo.url);
+  } else if (changeInfo.status === "complete") {
+    const url = (tab && tab.url) || null;
+    checkTabAndUpdate(tabId, url);
+  }
+});
+
+// When switching active tabs, check the newly active tab
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab) return;
+    checkTabAndUpdate(activeInfo.tabId, tab.url);
+  });
+});
+
+// Clean up when a tab is closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  lastProcessedUrlByTab.delete(tabId);
+  try {
+    chrome.action.setBadgeText({ text: "", tabId });
+  } catch (e) {
+    // ignore
   }
 });
