@@ -6,6 +6,9 @@
  * @returns {string|null} The URL of the sitemap if found, otherwise null
  */
 // Compatibility: create `browser` alias when not present (minimal cross-browser support)
+/**
+ * Minimal cross‑browser alias. Ensures `browser` exists when only `chrome` is available.
+ */
 if (
   typeof globalThis.browser === "undefined" &&
   typeof globalThis.chrome !== "undefined"
@@ -26,6 +29,13 @@ const sitemapCache = new Map(); // key: sitemapUrl
 /** @type {Map<number, number>} */
 const lastBadgeCount = new Map(); // tabId -> last count applied
 
+/**
+ * Update extension badge text and colors for a given tab.
+ *
+ * @param {number} tabId - Target tab ID.
+ * @param {number} count - Count to display on the badge (0 clears it).
+ * @returns {void}
+ */
 function updateBadge(tabId, count) {
   try {
     const prev = lastBadgeCount.get(tabId);
@@ -55,6 +65,12 @@ function updateBadge(tabId, count) {
   }
 }
 
+/**
+ * Try to guess a sitemap URL by testing common endpoints on the given hostname.
+ *
+ * @param {string} hostname - Hostname to test.
+ * @returns {Promise<string|null>} Resolved sitemap URL or null if not found.
+ */
 async function getSitemapUrl(hostname) {
   const possibleSitemapUrls = [
     `https://${hostname}/sitemap.xml`,
@@ -82,6 +98,12 @@ async function getSitemapUrl(hostname) {
  *
  * @returns {Object} An object containing the parsing result and URLs
  */
+/**
+ * Fetch and parse the sitemap at the provided URL, with caching and size guards.
+ *
+ * @param {string} sitemapUrl - Absolute sitemap URL.
+ * @returns {Promise<Object>} Result object with success flag, urls, count, lastModified, and/or error.
+ */
 async function parseSitemap(sitemapUrl) {
   // Cache-first: return recent fetch to avoid repeated network
   const cached = sitemapCache.get(sitemapUrl);
@@ -101,8 +123,8 @@ async function parseSitemap(sitemapUrl) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const cl = response.headers.get("content-length");
-    if (cl && Number(cl) > MAX_SITEMAP_BYTES) {
+    const contentLength = response.headers.get("content-length");
+    if (contentLength && Number(contentLength) > MAX_SITEMAP_BYTES) {
       throw new Error("Sitemap demasiado grande (límite 5MB)");
     }
 
@@ -123,6 +145,12 @@ async function parseSitemap(sitemapUrl) {
 }
 
 // Extract parsing logic into a separate function so we can parse text from any source
+/**
+ * Parse a sitemap XML string into URL entries. Uses DOMParser when possible, with regex fallback.
+ *
+ * @param {string} text - Raw XML content.
+ * @returns {Object} Object with success flag, urls list, count, lastModified, and/or error.
+ */
 function parseSitemapFromText(text) {
   // Helper: safe text extraction
   const getText = (node) => (node && typeof node.textContent === "string" ? node.textContent.trim() : "");
@@ -208,6 +236,13 @@ function parseSitemapFromText(text) {
 }
 
 // Page-context fetch fallback using scripting.executeScript
+/**
+ * Fallback to fetch sitemap content within the page context (bypassing CORS in background).
+ *
+ * @param {string} sitemapUrl - Absolute URL to fetch.
+ * @param {number} tabId - Tab ID used for `scripting.executeScript` target.
+ * @returns {Promise<Object>} Result object with success flag and text or error.
+ */
 async function pageFetchSitemap(sitemapUrl, tabId) {
   if (!tabId) {
     return {
@@ -253,6 +288,13 @@ async function pageFetchSitemap(sitemapUrl, tabId) {
  *
  * @returns {Object|null} The sitemap URL object if found, otherwise null
  */
+/**
+ * Determine whether a given URL (sans params/fragments) exists within the sitemap URLs.
+ *
+ * @param {string} currentUrl - The URL to check.
+ * @param {Array<Object>} sitemapUrls - Parsed sitemap URL entries.
+ * @returns {Object|null} Matching entry or null.
+ */
 function isUrlInSitemap(currentUrl, sitemapUrls) {
   // Remove query parameters and fragments, then remove trailing slashes
   const cleanCurrentUrl = removeUrlParameters(currentUrl).replace(/\/$/, "");
@@ -273,6 +315,13 @@ function isUrlInSitemap(currentUrl, sitemapUrls) {
  * @param {string} tabUrl - The URL of the current tab
  *
  * @returns {Object} The result object containing sitemap information
+ */
+/**
+ * Resolve sitemap for the tab URL, parse it (with fallback), and evaluate presence of the tab URL.
+ *
+ * @param {string} tabUrl - Current tab URL.
+ * @param {number} tabId - Current tab ID (used for page-context fallback).
+ * @returns {Promise<Object>} Result with status, hasError, message, and sitemap info.
  */
 async function processSitemapRequest(tabUrl, tabId) {
   try {
@@ -331,6 +380,61 @@ async function processSitemapRequest(tabUrl, tabId) {
  * Listen for messages from popup.js to process sitemap checks
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Provide normalized sitemap URL list for the given page URL
+  if (request.action === "getSitemapUrls") {
+    (async () => {
+      try {
+        const tabUrl = request.url;
+        const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
+        if (!tabUrl) {
+          sendResponse({ success: false, error: "No URL provided" });
+          return;
+        }
+
+        const url = new URL(tabUrl);
+        const hostname = url.hostname;
+        const sitemapUrl = await getSitemapUrl(hostname);
+        if (!sitemapUrl) {
+          sendResponse({ success: false, error: "No sitemap found" });
+          return;
+        }
+
+        let sitemapData = await parseSitemap(sitemapUrl);
+        if (!sitemapData.success && tabId) {
+          const pageFetchResult = await pageFetchSitemap(sitemapUrl, tabId);
+          if (pageFetchResult && pageFetchResult.success && pageFetchResult.text) {
+            sitemapData = parseSitemapFromText(pageFetchResult.text);
+          }
+        }
+
+        if (!sitemapData.success) {
+          sendResponse({ success: false, error: sitemapData.error || "Parse error" });
+          return;
+        }
+
+        // Normalize to origin+pathname without trailing slash (except root)
+        const normalized = [];
+        for (const item of sitemapData.urls) {
+          try {
+            const urlObject = new URL(item.loc);
+            const core = urlObject.origin + urlObject.pathname;
+            let clean = removeUrlParameters(core);
+            // remove trailing slash except for root
+            if (clean.length > 1) clean = clean.replace(/\/$/, "");
+            normalized.push(clean);
+          } catch (_) {
+            // skip invalid URL
+          }
+        }
+
+        sendResponse({ success: true, urls: normalized });
+      } catch (e) {
+        sendResponse({ success: false, error: e && e.message ? e.message : String(e) });
+      }
+    })();
+
+    return true; // async response
+  }
   // Remove a non-indexed URL from the list
   if (request.action === "removeNonIndexedUrl") {
     const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
@@ -371,11 +475,10 @@ const lastProcessedUrlByTab = new Map();
 const nonIndexedByTab = new Map();
 
 /**
- * Remove query parameters and fragments from a URL
+ * Remove query parameters and fragments from a URL.
  *
- * @param {string} url - The URL to clean
- *
- * @returns {string} The URL without query parameters or fragments
+ * @param {string} url - The URL to clean.
+ * @returns {string} URL without query parameters or fragments.
  */
 function removeUrlParameters(url) {
   try {
@@ -388,11 +491,10 @@ function removeUrlParameters(url) {
 }
 
 /**
- * Add a non-indexed URL to the tracking set for a given tab
+ * Add a non‑indexed URL to the tracking set for a given tab and update the badge.
  *
- * @param {number} tabId - The ID of the tab
- * @param {string} url - The URL to add
- *
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} url - The URL to add.
  * @returns {void}
  */
 function addNonIndexedUrl(tabId, url) {
@@ -416,11 +518,10 @@ function addNonIndexedUrl(tabId, url) {
 }
 
 /**
- * Remove a non-indexed URL from the tracking set for a given tab
+ * Remove a non‑indexed URL from the tracking set for a given tab and update the badge.
  *
- * @param {number} tabId - The ID of the tab
- * @param {string} url - The URL to remove
- *
+ * @param {number} tabId - The ID of the tab.
+ * @param {string} url - The URL to remove.
  * @returns {void}
  */
 function removeNonIndexedUrl(tabId, url) {
@@ -443,11 +544,10 @@ function removeNonIndexedUrl(tabId, url) {
 }
 
 /**
- * Get the list of non-indexed URLs for a given tab
+ * Get the list of non‑indexed URLs for a given tab.
  *
- * @param {number} tabId - The ID of the tab
- *
- * @returns {Array<string>} The list of non-indexed URLs
+ * @param {number} tabId - The ID of the tab.
+ * @returns {Array<string>} The list of non‑indexed URLs.
  */
 function getNonIndexedList(tabId) {
   const set = nonIndexedByTab.get(tabId);
@@ -455,11 +555,11 @@ function getNonIndexedList(tabId) {
 }
 
 /**
- * Export non-indexed URLs for a tab as sitemap <url> blocks
+ * Export non‑indexed URLs for a tab as sitemap <url> blocks.
  *
- * @param {number} tabId - The tab id whose non-indexed list to export
- * @param {string} lastmodInput - Optional date string (e.g. YYYY-MM-DD). If invalid, today's date is used.
- * @returns {string} XML fragment containing <url> entries (no wrapper)
+ * @param {number} tabId - The tab id whose non‑indexed list to export.
+ * @param {string} lastmodInput - Optional date string (e.g., YYYY‑MM‑DD). If invalid, today's date is used.
+ * @returns {string} XML fragment containing <url> entries (no wrapper).
  */
 function exportNonIndexedUrls(tabId, lastmodInput) {
   const set = nonIndexedByTab.get(tabId);
@@ -472,22 +572,22 @@ function exportNonIndexedUrls(tabId, lastmodInput) {
     return d.toISOString().replace(/\.\d{3}Z$/, "+00:00");
   }
 
-  let ts = null;
+  let lastmodTimestamp = null;
   if (lastmodInput) {
     const parsed = new Date(lastmodInput);
     if (!isNaN(parsed.getTime())) {
-      ts = formatWithOffset(parsed);
+      lastmodTimestamp = formatWithOffset(parsed);
     }
   }
-  if (!ts) ts = formatWithOffset(new Date());
+  if (!lastmodTimestamp) lastmodTimestamp = formatWithOffset(new Date());
 
   const urls = Array.from(set);
   const entries = urls
-    .map((u) => {
+    .map((urlString) => {
       return [
         "    <url>",
-        `      <loc>${u}</loc>`,
-        `      <lastmod>${ts}</lastmod>`,
+        `      <loc>${urlString}</loc>`,
+        `      <lastmod>${lastmodTimestamp}</lastmod>`,
         "    </url>",
       ].join("\n");
     })
@@ -496,6 +596,13 @@ function exportNonIndexedUrls(tabId, lastmodInput) {
   return entries;
 }
 
+/**
+ * Update badge and non‑indexed list based on a result from processing a sitemap request.
+ *
+ * @param {any} result - Result object from processSitemapRequest.
+ * @param {number} tabId - Tab ID to update.
+ * @returns {void}
+ */
 function updateBadgeFromResult(result, tabId) {
   try {
     // If URL is not found in the sitemap, add it to the non-indexed set for the tab
@@ -529,6 +636,13 @@ function updateBadgeFromResult(result, tabId) {
   }
 }
 
+/**
+ * When a tab's URL changes or finishes loading, process it and update badge state.
+ *
+ * @param {number} tabId - Tab ID.
+ * @param {string} url - Tab URL.
+ * @returns {Promise<void>}
+ */
 async function checkTabAndUpdate(tabId, url) {
   if (!url || !/^https?:\/\//i.test(url)) return;
 

@@ -5,7 +5,8 @@
   "description": "Detecta si la URL actual está en el sitemap del sitio y muestra la información del sitemap",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"
