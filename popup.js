@@ -263,54 +263,88 @@ function applyLinkWarningBorder(tabId) {
       return;
     }
     const sitemapUrls = Array.isArray(resp.urls) ? resp.urls : [];
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: (sitemapList, styleId, className, warningColor) => {
-        try {
-          let style = document.getElementById(styleId);
-          if (!style) {
-            style = document.createElement("style");
-            style.id = styleId;
-            style.textContent = `.${className} { border: 2px solid ${warningColor} !important; }`;
-            document.documentElement.appendChild(style);
+    chrome.scripting.executeScript(
+      {
+        target: { tabId },
+        func: (sitemapList, styleId, className, warningColor) => {
+          try {
+            let style = document.getElementById(styleId);
+            if (!style) {
+              style = document.createElement("style");
+              style.id = styleId;
+              style.textContent = `.${className} { border: 2px solid ${warningColor} !important; }`;
+              document.documentElement.appendChild(style);
+            }
+
+            // Helper to normalize URL: origin+pathname without query/hash, strip trailing slash except root
+            const normalize = (urlInput) => {
+              try {
+                const parsedUrl = new URL(urlInput, document.baseURI);
+                let originAndPath = parsedUrl.origin + parsedUrl.pathname;
+                if (originAndPath.length > 1) originAndPath = originAndPath.replace(/\/$/, "");
+                return originAndPath;
+              } catch {
+                return "";
+              }
+            };
+
+            const sameOrigin = window.location.origin;
+            const sitemapSet = new Set(sitemapList || []);
+            const links = document.querySelectorAll('a[href]');
+            const nonIndexed = [];
+            links.forEach((anchor) => {
+              const hrefValue = anchor.getAttribute('href');
+              const normalized = normalize(hrefValue);
+              // Same-origin only
+              if (!normalized || !normalized.startsWith(sameOrigin)) {
+                anchor.classList.remove(className);
+                return;
+              }
+              // If link is in sitemap, do not highlight
+              if (sitemapSet.has(normalized)) {
+                anchor.classList.remove(className);
+              } else {
+                anchor.classList.add(className);
+                nonIndexed.push(normalized);
+              }
+            });
+            // Return the list of detected non-indexed, same-origin links
+            // Use Set to avoid duplicates before returning
+            return Array.from(new Set(nonIndexed));
+          } catch (_) {
+            return [];
           }
-
-          // Helper to normalize URL: origin+pathname without query/hash, strip trailing slash except root
-          const normalize = (urlInput) => {
-            try {
-              const parsedUrl = new URL(urlInput, document.baseURI);
-              let originAndPath = parsedUrl.origin + parsedUrl.pathname;
-              if (originAndPath.length > 1) originAndPath = originAndPath.replace(/\/$/, "");
-              return originAndPath;
-            } catch {
-              return "";
-            }
-          };
-
-          const sameOrigin = window.location.origin;
-          const sitemapSet = new Set(sitemapList || []);
-          const links = document.querySelectorAll('a[href]');
-          links.forEach((anchor) => {
-            const hrefValue = anchor.getAttribute('href');
-            const normalized = normalize(hrefValue);
-            // Same-origin only
-            if (!normalized || !normalized.startsWith(sameOrigin)) {
-              anchor.classList.remove(className);
-              return;
-            }
-            // If link is in sitemap, do not highlight
-            if (sitemapSet.has(normalized)) {
-              anchor.classList.remove(className);
-            } else {
-              anchor.classList.add(className);
-            }
-          });
-        } catch (_) {
-          // ignore
-        }
+        },
+        args: [sitemapUrls, LINK_WARNING_STYLE_ID, LINK_WARNING_CLASS_NAME, WARNING_BORDER_COLOR],
       },
-      args: [sitemapUrls, LINK_WARNING_STYLE_ID, LINK_WARNING_CLASS_NAME, WARNING_BORDER_COLOR],
-    });
+      // Callback receives an array of InjectionResult items
+      (injectionResults) => {
+        try {
+          const first = Array.isArray(injectionResults) && injectionResults.length > 0 ? injectionResults[0] : null;
+          const detected = first && first.result ? first.result : [];
+          if (Array.isArray(detected) && detected.length > 0) {
+            // Send to background to add to the per-tab non-indexed list
+            chrome.runtime.sendMessage(
+              { action: "addNonIndexedBulk", tabId, urls: detected },
+              () => {
+                // Refresh list in the popup UI
+                chrome.runtime.sendMessage(
+                  { action: "getNonIndexedListForTab", tabId },
+                  (respList) => {
+                    if (respList && respList.success && Array.isArray(respList.urls)) {
+                      nonIndexedSection.classList.remove("hidden");
+                      displayNonIndexedList(respList.urls);
+                    }
+                  }
+                );
+              }
+            );
+          }
+        } catch (_) {
+          // ignore UI refresh errors
+        }
+      }
+    );
   });
 }
 

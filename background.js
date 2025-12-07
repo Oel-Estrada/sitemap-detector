@@ -444,6 +444,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false; // response sent synchronously
   }
 
+  // Add multiple non-indexed URLs to the list (bulk add)
+  if (request.action === "addNonIndexedBulk") {
+    const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
+    const urls = Array.isArray(request.urls) ? request.urls : [];
+    try {
+      for (const u of urls) addNonIndexedUrl(tabId, u);
+      sendResponse({ success: true, count: getNonIndexedList(tabId).length });
+    } catch (e) {
+      sendResponse({ success: false, error: e && e.message ? e.message : String(e) });
+    }
+    return false; // synchronous response
+  }
+
+  // Return current non-indexed list for a tab
+  if (request.action === "getNonIndexedListForTab") {
+    const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
+    try {
+      const list = getNonIndexedList(tabId);
+      sendResponse({ success: true, urls: list });
+    } catch (e) {
+      sendResponse({ success: false, error: e && e.message ? e.message : String(e) });
+    }
+    return false; // synchronous response
+  }
+
   // Export non-indexed URLs as sitemap <url> blocks
   if (request.action === "exportNonIndexed") {
     const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
