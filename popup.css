@@ -159,6 +159,30 @@ h2 {
     filter: brightness(0.98);
 }
 
+.btn-delete {
+    padding: 4px 8px !important;
+    font-size: 12px;
+    min-width: 30px;
+    background: #ffebee !important;
+    color: #c62828 !important;
+    border: 1px solid #ef5350 !important;
+}
+
+.btn-delete:hover {
+    background: #ffcdd2 !important;
+}
+
+.non-indexed-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.non-indexed-item span {
+    flex: 1;
+}
+
 /* Export output textbox */
 #export-output {
     font-family: monospace;

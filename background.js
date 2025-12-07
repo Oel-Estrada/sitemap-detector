@@ -226,6 +226,15 @@ async function processSitemapRequest(tabUrl, tabId) {
  * Listen for messages from popup.js to process sitemap checks
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Remove a non-indexed URL from the list
+  if (request.action === "removeNonIndexedUrl") {
+    const tabId = request.tabId || (sender && sender.tab && sender.tab.id);
+    const url = request.url;
+    removeNonIndexedUrl(tabId, url);
+    sendResponse({ success: true });
+    return false; // response sent synchronously
+  }
+
   // Export non-indexed URLs as sitemap <url> blocks
   if (request.action === "exportNonIndexed") {
     const tabId = request.tabId || (sender && sender.tab && sender.tab.id);

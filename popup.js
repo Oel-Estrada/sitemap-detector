@@ -159,8 +159,28 @@ function displayNonIndexedList(urls) {
   const displayUrls = urls.slice(0, 50);
   displayUrls.forEach((u) => {
     const urlItem = document.createElement("div");
-    urlItem.className = "url-item";
-    urlItem.innerHTML = `<a href="${u}" target="_blank">${u}</a>`;
+    urlItem.className = "url-item non-indexed-item";
+
+    const linkSpan = document.createElement("span");
+    linkSpan.style.flex = "1";
+    linkSpan.innerHTML = `<a href="${u}" target="_blank">${u}</a>`;
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn-delete";
+    deleteBtn.textContent = "✕";
+    deleteBtn.title = "Eliminar de la lista";
+    deleteBtn.addEventListener("click", () => {
+      chrome.runtime.sendMessage(
+        { action: "removeNonIndexedUrl", url: u, tabId: window._currentTabId },
+        () => {
+          // Refresh the list after deletion
+          displayNonIndexedList(urls.filter((url) => url !== u));
+        }
+      );
+    });
+
+    urlItem.appendChild(linkSpan);
+    urlItem.appendChild(deleteBtn);
     nonIndexedContainer.appendChild(urlItem);
   });
 
