@@ -283,7 +283,7 @@ function applyLinkWarningBorder(tabId) {
                   background: ${warningColor};
                   border-radius: 50%;
                   vertical-align: middle;
-                  aspect-radio: 1
+                  aspect-ratio: 1;
                 }
               `;
               document.documentElement.appendChild(style);
